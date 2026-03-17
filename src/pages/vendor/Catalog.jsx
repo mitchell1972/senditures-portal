@@ -3,6 +3,23 @@ import { useApp } from '../../context/AppContext'
 import { Card, Badge, Button, Table, PageHeader, Modal, Input, Select, fmt, EmptyState } from '../../components/ui'
 import { Upload, Download, Package, CheckCircle, AlertCircle, FileText, Plus } from 'lucide-react'
 import { PRODUCT_STATUSES } from '../../data/mockData'
+import * as XLSX from 'xlsx'
+
+function validateRows(rawRows) {
+  const required = ['vendor_sku', 'product_name', 'cost', 'msrp', 'quantity_on_hand']
+  const rows = []
+  const errors = []
+  rawRows.forEach((row, i) => {
+    const rowNum = i + 2 // 1-indexed + header row
+    if (!row.vendor_sku) { errors.push(`Row ${rowNum}: missing vendor_sku`); return }
+    if (!row.product_name) { errors.push(`Row ${rowNum}: missing product_name`); return }
+    if (isNaN(parseFloat(row.cost))) { errors.push(`Row ${rowNum}: invalid cost "${row.cost}"`); return }
+    if (isNaN(parseFloat(row.msrp))) { errors.push(`Row ${rowNum}: invalid msrp "${row.msrp}"`); return }
+    if (isNaN(parseInt(row.quantity_on_hand))) { errors.push(`Row ${rowNum}: invalid quantity_on_hand "${row.quantity_on_hand}"`); return }
+    rows.push(row)
+  })
+  return { rows, errors }
+}
 
 function parseCSV(text) {
   const lines = text.trim().split('\n')
@@ -13,20 +30,40 @@ function parseCSV(text) {
   if (missing.length > 0) {
     return { rows: [], errors: [`Missing required columns: ${missing.join(', ')}`] }
   }
-  const rows = []
-  const errors = []
+  const rawRows = []
   for (let i = 1; i < lines.length; i++) {
     const vals = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''))
     const row = {}
     headers.forEach((h, idx) => { row[h] = vals[idx] || '' })
-    if (!row.vendor_sku) { errors.push(`Row ${i + 1}: missing vendor_sku`); continue }
-    if (!row.product_name) { errors.push(`Row ${i + 1}: missing product_name`); continue }
-    if (isNaN(parseFloat(row.cost))) { errors.push(`Row ${i + 1}: invalid cost "${row.cost}"`); continue }
-    if (isNaN(parseFloat(row.msrp))) { errors.push(`Row ${i + 1}: invalid msrp "${row.msrp}"`); continue }
-    if (isNaN(parseInt(row.quantity_on_hand))) { errors.push(`Row ${i + 1}: invalid quantity_on_hand "${row.quantity_on_hand}"`); continue }
-    rows.push(row)
+    rawRows.push(row)
   }
-  return { rows, errors }
+  return validateRows(rawRows)
+}
+
+function parseXLSX(buffer) {
+  try {
+    const wb = XLSX.read(buffer, { type: 'array' })
+    const sheet = wb.Sheets[wb.SheetNames[0]]
+    const jsonRows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+    if (jsonRows.length === 0) return { rows: [], errors: ['File appears to be empty'] }
+    // Normalize headers to snake_case
+    const rawRows = jsonRows.map(row => {
+      const normalized = {}
+      Object.keys(row).forEach(k => {
+        normalized[k.trim().toLowerCase().replace(/\s+/g, '_')] = row[k]
+      })
+      return normalized
+    })
+    const required = ['vendor_sku', 'product_name', 'cost', 'msrp', 'quantity_on_hand']
+    const firstRowKeys = Object.keys(rawRows[0])
+    const missing = required.filter(r => !firstRowKeys.includes(r))
+    if (missing.length > 0) {
+      return { rows: [], errors: [`Missing required columns: ${missing.join(', ')}`] }
+    }
+    return validateRows(rawRows)
+  } catch (err) {
+    return { rows: [], errors: [`Failed to parse XLSX file: ${err.message}`] }
+  }
 }
 
 const TEMPLATE_CSV = `vendor_sku,product_name,description,category,cost,msrp,map,quantity_on_hand,upc,image_url
@@ -53,10 +90,12 @@ export default function Catalog() {
     const file = e.target.files[0]
     if (!file) return
     setImporting(true)
+    const isXLSX = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
     const reader = new FileReader()
     reader.onload = (ev) => {
-      const text = ev.target.result
-      const { rows, errors } = parseCSV(text)
+      const { rows, errors } = isXLSX
+        ? parseXLSX(ev.target.result)
+        : parseCSV(ev.target.result)
       setImporting(false)
 
       const log = {
@@ -98,7 +137,11 @@ export default function Catalog() {
 
       setImportResult({ rows, errors, fileName: file.name, log })
     }
-    reader.readAsText(file)
+    if (isXLSX) {
+      reader.readAsArrayBuffer(file)
+    } else {
+      reader.readAsText(file)
+    }
     e.target.value = ''
   }
 

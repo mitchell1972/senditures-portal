@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo } from 'react'
 import {
   users as initialUsers,
   vendors as initialVendors,
@@ -14,6 +14,7 @@ const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null)
+  const [users, setUsers] = useState(initialUsers)
   const [vendors, setVendors] = useState(initialVendors)
   const [products, setProducts] = useState(initialProducts)
   const [salesRecords] = useState(initialSales)
@@ -22,11 +23,21 @@ export function AppProvider({ children }) {
   const [notifications, setNotifications] = useState(initialNotifications)
   const [importLogs, setImportLogs] = useState(initialImportLogs)
 
+  const [activityLog, setActivityLog] = useState([])
+
+  const addActivityEntry = useCallback((entry) => {
+    setActivityLog(prev => [{
+      id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      ...entry,
+    }, ...prev])
+  }, [])
+
   // ── Auth ────────────────────────────────────────────────────────────────────
   const login = useCallback((userId) => {
-    const user = initialUsers.find(u => u.id === userId)
+    const user = users.find(u => u.id === userId)
     if (user) setCurrentUser(user)
-  }, [])
+  }, [users])
 
   const logout = useCallback(() => setCurrentUser(null), [])
 
@@ -43,7 +54,40 @@ export function AppProvider({ children }) {
         ? { ...v, onboardingStatus: status, approvedDate: status === 'approved' ? new Date().toISOString().split('T')[0] : v.approvedDate }
         : v
     ))
-  }, [])
+    addActivityEntry({ type: 'vendor_status', vendorId, action: `Vendor status changed to ${status}`, user: currentUser?.name || 'System' })
+  }, [addActivityEntry, currentUser])
+
+  const updateVendorDetails = useCallback((vendorId, details) => {
+    setVendors(prev => prev.map(v =>
+      v.id === vendorId ? { ...v, ...details } : v
+    ))
+    addActivityEntry({ type: 'vendor_update', vendorId, action: 'Vendor details updated', user: currentUser?.name || 'System' })
+  }, [addActivityEntry, currentUser])
+
+  // ── User management helpers ───────────────────────────────────────────────
+  const getUsersByVendor = useCallback((vendorId) =>
+    users.filter(u => u.vendorId === vendorId), [users])
+
+  const addUser = useCallback((user) => {
+    const newUser = { id: `u${Date.now()}`, active: true, ...user }
+    setUsers(prev => [...prev, newUser])
+    // Add user to vendor's users array
+    setVendors(prev => prev.map(v =>
+      v.id === user.vendorId ? { ...v, users: [...(v.users || []), newUser.id] } : v
+    ))
+    addActivityEntry({ type: 'user_added', vendorId: user.vendorId, action: `User ${user.name} added`, user: currentUser?.name || 'System' })
+    return newUser
+  }, [addActivityEntry, currentUser])
+
+  const updateUser = useCallback((userId, updates) => {
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u))
+    addActivityEntry({ type: 'user_updated', action: `User ${userId} updated`, user: currentUser?.name || 'System' })
+  }, [addActivityEntry, currentUser])
+
+  const deactivateUser = useCallback((userId) => {
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, active: false } : u))
+    addActivityEntry({ type: 'user_deactivated', action: `User ${userId} deactivated`, user: currentUser?.name || 'System' })
+  }, [addActivityEntry, currentUser])
 
   // ── Product helpers ─────────────────────────────────────────────────────────
   const getProductsByVendor = useCallback((vendorId) =>
@@ -51,7 +95,8 @@ export function AppProvider({ children }) {
 
   const addProducts = useCallback((newProducts) => {
     setProducts(prev => [...prev, ...newProducts])
-  }, [])
+    addActivityEntry({ type: 'product_import', action: `${newProducts.length} products imported`, vendorId: newProducts[0]?.vendorId, user: currentUser?.name || 'System' })
+  }, [addActivityEntry, currentUser])
 
   const updateProducts = useCallback((updatedProducts) => {
     setProducts(prev => {
@@ -74,7 +119,8 @@ export function AppProvider({ children }) {
 
   const addPaymentRecord = useCallback((record) => {
     setPaymentRecords(prev => [record, ...prev])
-  }, [])
+    addActivityEntry({ type: 'payment_added', vendorId: record.vendorId, action: `Payment record added for ${record.paymentPeriod}`, user: currentUser?.name || 'System' })
+  }, [addActivityEntry, currentUser])
 
   // ── Document helpers ────────────────────────────────────────────────────────
   const getDocumentsByVendor = useCallback((vendorId) =>
@@ -82,7 +128,8 @@ export function AppProvider({ children }) {
 
   const addDocument = useCallback((doc) => {
     setDocuments(prev => [doc, ...prev])
-  }, [])
+    addActivityEntry({ type: 'document_uploaded', vendorId: doc.vendorId, action: `Document "${doc.fileName}" uploaded`, user: currentUser?.name || 'System' })
+  }, [addActivityEntry, currentUser])
 
   // ── Notification helpers ────────────────────────────────────────────────────
   const getNotificationsForVendor = useCallback((vendorId) =>
@@ -160,8 +207,10 @@ export function AppProvider({ children }) {
   const value = {
     // Auth
     currentUser, login, logout,
+    // Users
+    users, getUsersByVendor, addUser, updateUser, deactivateUser,
     // Vendors
-    vendors, currentVendor, getVendorById, updateVendorStatus,
+    vendors, currentVendor, getVendorById, updateVendorStatus, updateVendorDetails,
     // Products
     products, getProductsByVendor, addProducts, updateProducts,
     // Sales
@@ -176,6 +225,8 @@ export function AppProvider({ children }) {
     importLogs, addImportLog,
     // Metrics
     getVendorMetrics,
+    // Activity log
+    activityLog, addActivityEntry,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

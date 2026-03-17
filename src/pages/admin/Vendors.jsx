@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../../context/AppContext'
-import { Card, Badge, Button, Table, PageHeader, MetricCard, Modal, fmtDate } from '../../components/ui'
-import { Building2, CheckCircle, XCircle, AlertCircle, Eye, Users, Clock } from 'lucide-react'
+import { Card, Badge, Button, Table, PageHeader, MetricCard, Modal, Input, fmtDate } from '../../components/ui'
+import { Building2, CheckCircle, XCircle, AlertCircle, Eye, Users, Clock, MessageSquare } from 'lucide-react'
 import { ONBOARDING_STATUSES } from '../../data/mockData'
 
 export default function Vendors() {
-  const { vendors, updateVendorStatus, getProductsByVendor } = useApp()
+  const { vendors, updateVendorStatus, getProductsByVendor, sendNotification } = useApp()
   const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState('all')
   const [confirmModal, setConfirmModal] = useState(null) // { vendorId, action, vendorName }
+  const [requestInfoModal, setRequestInfoModal] = useState(null) // { vendorId, vendorName }
+  const [requestInfoMsg, setRequestInfoMsg] = useState('')
 
   const filtered = statusFilter === 'all' ? vendors : vendors.filter(v => v.onboardingStatus === statusFilter)
 
@@ -32,10 +34,23 @@ export default function Vendors() {
       approve: 'approved',
       reject: 'rejected',
       incomplete: 'incomplete',
-      request_info: 'pending_review',
     }
     updateVendorStatus(vendorId, statusMap[action])
     setConfirmModal(null)
+  }
+
+  const handleRequestInfo = () => {
+    if (!requestInfoModal) return
+    updateVendorStatus(requestInfoModal.vendorId, 'incomplete')
+    sendNotification({
+      vendorId: requestInfoModal.vendorId,
+      allVendors: false,
+      title: 'Additional Information Requested',
+      message: requestInfoMsg || 'The Senditures team has requested additional information to complete your onboarding. Please log in to the portal and update your application.',
+      type: 'missing_docs',
+    })
+    setRequestInfoModal(null)
+    setRequestInfoMsg('')
   }
 
   const columns = [
@@ -81,14 +96,14 @@ export default function Vendors() {
               <Button size="sm" variant="danger" onClick={() => handleAction('reject', v, row.companyName)}>
                 <XCircle size={13} />
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => handleAction('incomplete', v, row.companyName)}>
-                <AlertCircle size={13} />
+              <Button size="sm" variant="secondary" onClick={() => setRequestInfoModal({ vendorId: v, vendorName: row.companyName })}>
+                <MessageSquare size={13} /> Request Info
               </Button>
             </>
           )}
           {row.onboardingStatus === 'incomplete' && (
-            <Button size="sm" variant="secondary" onClick={() => handleAction('request_info', v, row.companyName)}>
-              <Clock size={13} /> Request Info
+            <Button size="sm" variant="secondary" onClick={() => setRequestInfoModal({ vendorId: v, vendorName: row.companyName })}>
+              <MessageSquare size={13} /> Request Info
             </Button>
           )}
         </div>
@@ -145,6 +160,33 @@ export default function Vendors() {
                 onClick={confirmAction}
               >
                 Confirm
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Request Info modal */}
+      <Modal open={!!requestInfoModal} onClose={() => { setRequestInfoModal(null); setRequestInfoMsg('') }} title="Request Information" maxWidth="max-w-md">
+        {requestInfoModal && (
+          <div>
+            <p className="text-sm text-gray-600 mb-3">
+              Send a request to <strong>{requestInfoModal.vendorName}</strong> for additional information. The vendor's status will be set to <strong>Incomplete</strong> and they will receive a notification.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Message to Vendor</label>
+              <textarea
+                value={requestInfoMsg}
+                onChange={e => setRequestInfoMsg(e.target.value)}
+                placeholder="Please provide additional details about your tax ID and upload your insurance certificate..."
+                rows={3}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={() => { setRequestInfoModal(null); setRequestInfoMsg('') }}>Cancel</Button>
+              <Button onClick={handleRequestInfo}>
+                <MessageSquare size={14} /> Send Request
               </Button>
             </div>
           </div>

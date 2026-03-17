@@ -10,6 +10,7 @@ import Documents from './pages/vendor/Documents'
 import Payments from './pages/vendor/Payments'
 import Notifications from './pages/vendor/Notifications'
 import Onboarding from './pages/vendor/Onboarding'
+import TeamManagement from './pages/vendor/TeamManagement'
 
 import Vendors from './pages/admin/Vendors'
 import VendorDetail from './pages/admin/VendorDetail'
@@ -66,6 +67,7 @@ function AppRoutes() {
       <Route path="/payments"      element={<VendorRoute><Payments /></VendorRoute>} />
       <Route path="/notifications" element={<VendorRoute><Notifications /></VendorRoute>} />
       <Route path="/onboarding"    element={<VendorRoute><Onboarding /></VendorRoute>} />
+      <Route path="/team"          element={<RequireAuth allowedRoles={['vendor_admin']}><Layout><TeamManagement /></Layout></RequireAuth>} />
 
       {/* Admin routes */}
       <Route path="/admin/vendors"       element={<AdminRoute><Vendors /></AdminRoute>} />

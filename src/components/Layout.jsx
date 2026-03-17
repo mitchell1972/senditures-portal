@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import {
   LayoutDashboard, Package, FileText, CreditCard, Bell,
-  Users, ShoppingBag, Upload, Settings, LogOut, Building2,
+  Users, ShoppingBag, Upload, LogOut, Building2,
   ChevronDown, AlertCircle,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -16,7 +16,7 @@ const vendorNav = [
 ]
 
 const vendorAdminExtra = [
-  { to: '/settings', icon: Settings, label: 'Company Settings' },
+  { to: '/team', icon: Users, label: 'Team Management' },
 ]
 
 const adminNav = [
