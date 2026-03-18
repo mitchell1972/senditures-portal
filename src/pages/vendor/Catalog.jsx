@@ -178,14 +178,30 @@ export default function Catalog() {
     { key: 'cost', label: 'Cost', render: v => fmt(v) },
     { key: 'msrp', label: 'MSRP', render: v => fmt(v) },
     { key: 'map', label: 'MAP', render: v => v ? fmt(v) : '—' },
-    { key: 'quantityOnHand', label: 'QOH', render: v => (
-      <span className={v === 0 ? 'text-red-600 font-semibold' : 'text-gray-700'}>{v}</span>
+    { key: 'quantityOnHand', label: 'Total QOH', render: v => (
+      <span className={`font-semibold ${v === 0 ? 'text-red-600' : 'text-gray-900'}`}>{v}</span>
     )},
-    { key: 'channelAvailability', label: 'Channels', render: v => (
-      v && v.length > 0
-        ? <div className="flex flex-wrap gap-1">{v.map(ch => <span key={ch} className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">{ch}</span>)}</div>
-        : <span className="text-gray-300 text-xs">—</span>
-    )},
+    { key: 'channelInventory', label: 'Stock by Channel', render: (v, row) => {
+      const inv = v || {}
+      const channels = row.channelAvailability || []
+      if (channels.length === 0) return <span className="text-gray-300 text-xs">—</span>
+      return (
+        <div className="space-y-0.5">
+          {channels.map(ch => (
+            <div key={ch} className="flex items-center gap-1.5 text-[11px]">
+              <span className="text-gray-500 w-16 truncate">{ch}</span>
+              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden min-w-[40px] max-w-[60px]">
+                <div
+                  className={`h-full rounded-full ${(inv[ch] || 0) === 0 ? 'bg-red-400' : 'bg-brand-500'}`}
+                  style={{ width: `${row.quantityOnHand > 0 ? Math.max(4, ((inv[ch] || 0) / row.quantityOnHand) * 100) : 0}%` }}
+                />
+              </div>
+              <span className={`font-medium tabular-nums w-6 text-right ${(inv[ch] || 0) === 0 ? 'text-red-600' : 'text-gray-700'}`}>{inv[ch] || 0}</span>
+            </div>
+          ))}
+        </div>
+      )
+    }},
     { key: 'status', label: 'Status', render: v => {
       const s = PRODUCT_STATUSES[v] || { label: v, color: 'gray' }
       return <Badge color={s.color} label={s.label} />
