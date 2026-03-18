@@ -181,6 +181,11 @@ export default function Catalog() {
     { key: 'quantityOnHand', label: 'QOH', render: v => (
       <span className={v === 0 ? 'text-red-600 font-semibold' : 'text-gray-700'}>{v}</span>
     )},
+    { key: 'channelAvailability', label: 'Channels', render: v => (
+      v && v.length > 0
+        ? <div className="flex flex-wrap gap-1">{v.map(ch => <span key={ch} className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">{ch}</span>)}</div>
+        : <span className="text-gray-300 text-xs">—</span>
+    )},
     { key: 'status', label: 'Status', render: v => {
       const s = PRODUCT_STATUSES[v] || { label: v, color: 'gray' }
       return <Badge color={s.color} label={s.label} />
